@@ -7,8 +7,7 @@
         "lint": "eslint src --fix",
         "format": "prettier --write src",
         "generate:components": "node generateComponents.js",
-        "integrate:components": "node integrateAssets.js",
-        "integrate:sections": "node integrateSections.js"
+        "integrate:assets": "node integrateAssets.js"
     },
     "devDependencies": {
         "autoprefixer": "^10.4.2",
