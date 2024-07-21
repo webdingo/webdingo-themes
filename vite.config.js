@@ -1,54 +1,72 @@
 import { defineConfig } from 'vite';
 import path from 'path';
-import glob from 'glob';
+import fs from 'fs';
 
-function getInputFiles() {
-  const globalFiles = glob.sync('src/global/**/*.js').reduce((acc, file) => {
-    const fileName = path.basename(file, path.extname(file));
-    acc[fileName] = path.resolve(__dirname, file);
-    return acc;
-  }, {});
+// Helper function to generate output file names with appropriate prefixes
+const getOutputFileName = (filePath) => {
+  const fileName = path.basename(filePath, path.extname(filePath));
+  const ext = path.extname(filePath);
+  
+  if (filePath.includes('/sections/')) {
+    return `assets/section-${fileName}${ext}`;
+  }
+  if (filePath.includes('/components/')) {
+    return `assets/component-${fileName}${ext}`;
+  }
+  if (filePath.includes('/templates/')) {
+    return `assets/template-${fileName}${ext}`;
+  }
+  
+  // For other files
+  return `assets/${fileName}${ext}`;
+};
 
-  const componentFiles = glob.sync('src/components/**/*.js').reduce((acc, file) => {
-    const fileName = `component-${path.basename(file, path.extname(file))}`;
-    acc[fileName] = path.resolve(__dirname, file);
-    return acc;
-  }, {});
+// Function to generate entries for rollupOptions input and asset file names
+const generateEntries = (dir, prefix = '') => {
+  const entries = {};
+  const files = fs.readdirSync(dir);
 
-  const sectionFiles = glob.sync('src/sections/**/*.js').reduce((acc, file) => {
-    const fileName = `section-${path.basename(file, path.extname(file))}`;
-    acc[fileName] = path.resolve(__dirname, file);
-    return acc;
-  }, {});
+  files.forEach(file => {
+    const filePath = path.join(dir, file);
+    const stat = fs.statSync(filePath);
 
-  return {
-    base: path.resolve(__dirname, 'src/global/base.js'),
-    ...globalFiles,
-    ...componentFiles,
-    ...sectionFiles
-  };
-}
+    if (stat.isDirectory()) {
+      // Recursively handle subdirectories
+      Object.assign(entries, generateEntries(filePath, `${prefix}${path.basename(file)}/`));
+    } else {
+      const fileName = `${prefix}${path.basename(file, path.extname(file))}`;
+      if (path.extname(file) === '.js' || path.extname(file) === '.scss' || path.extname(file) === '.css') {
+        entries[fileName] = filePath;
+      }
+    }
+  });
+
+  return entries;
+};
+
+// Generate entries for each directory
+const globalEntries = generateEntries(path.resolve(__dirname, 'src/global'));
+const componentEntries = generateEntries(path.resolve(__dirname, 'src/components'));
+const sectionEntries = generateEntries(path.resolve(__dirname, 'src/sections'));
+const templateEntries = generateEntries(path.resolve(__dirname, 'src/templates'));
 
 export default defineConfig({
   build: {
-    outDir: 'dist/assets',
     rollupOptions: {
-      input: getInputFiles(),
+      input: {
+        ...globalEntries,
+        ...componentEntries,
+        ...sectionEntries,
+        ...templateEntries,
+      },
       output: {
-        entryFileNames: '[name].js',
-        chunkFileNames: '[name].js',
-        assetFileNames: '[name][extname]'
-      }
-    }
+        entryFileNames: 'assets/[name].js',
+        chunkFileNames: 'assets/[name].js',
+        assetFileNames: (assetInfo) => {
+          // Use the custom function to determine asset file names
+          return getOutputFileName(assetInfo.name);
+        },
+      },
+    },
   },
-  css: {
-    preprocessorOptions: {
-      scss: {
-        additionalData: `
-          @import "node_modules/simple.css/dist/simple.min.css";
-          @import "src/global/base.scss";
-        `
-      }
-    }
-  }
 });
