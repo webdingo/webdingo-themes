@@ -24,21 +24,29 @@ function ensureDir(dir) {
 }
 
 // Process base.css and global.js files
-function processBaseAndGlobalFiles() {
+async function processBaseAndGlobalFiles() {
   const files = fs.readdirSync(assetsDir);
   const processedFiles = new Set();
 
-  files.forEach(file => {
+  for (const file of files) {
     const filePath = path.join(assetsDir, file);
     const fileExtension = path.extname(file).toLowerCase();
-    const fileName = path.basename(file, fileExtension);
 
     if (file === 'base.css') {
       ensureDir(baseDir);
-      const destFile = path.join(baseDir, file);
-      fs.copyFileSync(filePath, destFile);
-      console.log(`Moved ${file} to ${destFile}`);
-      processedFiles.add(file);
+
+      // Convert base.css to base.scss
+      const cssContent = fs.readFileSync(filePath, 'utf8');
+      try {
+        const result = await postcss().process(cssContent, { syntax: scssSyntax });
+        const formattedScss = prettier.format(result.css, { parser: 'scss' });
+        const scssFilePath = path.join(baseDir, 'base.scss');
+        fs.writeFileSync(scssFilePath, formattedScss);
+        console.log(`Converted and moved ${file} to ${scssFilePath}`);
+        processedFiles.add(file);
+      } catch (err) {
+        console.error(`Error processing ${file}:`, err);
+      }
     } else if (file === 'global.js') {
       ensureDir(baseDir);
       const destFile = path.join(baseDir, file);
@@ -46,7 +54,7 @@ function processBaseAndGlobalFiles() {
       console.log(`Moved ${file} to ${destFile}`);
       processedFiles.add(file);
     }
-  });
+  }
 
   return processedFiles;
 }
@@ -224,7 +232,7 @@ function getUtilsSubDir(fileName) {
 (async () => {
   try {
     // Process base and global files first
-    const processedFiles = processBaseAndGlobalFiles();
+    const processedFiles = await processBaseAndGlobalFiles();
 
     // Process templates next
     await processTemplates(processedFiles);
